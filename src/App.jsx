@@ -28,10 +28,10 @@ function CreateBoardModal({ onClose, onCreate, theme }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: 16 }}>
-      <div style={{ width: '100%', maxWidth: 460, background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 16, padding: 28, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+      <div style={{ width: '100%', maxWidth: 460, background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 16, padding: '24px 20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: theme.text }}>Create New Board</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 20 }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 20, padding: '4px 8px' }}>✕</button>
         </div>
         <div style={{ height: 70, borderRadius: 10, background: `linear-gradient(135deg, ${color}22, ${color}44)`, border: `2px solid ${color}`, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: color }} />
@@ -81,13 +81,20 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  
+  const [filterPriority] = useState('all');
   const [showCreateBoard, setShowCreateBoard] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  const isMobile = windowWidth <= 640;
+  const isTablet = windowWidth > 640 && windowWidth <= 1024;
+  const isDesktop = windowWidth > 1024;
+  const showSidebar = isDesktop || isTablet;
+  const sidebarWidth = isDesktop ? 220 : 200;
+  const bottomNavHeight = isMobile || isTablet ? 60 : 0;
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -107,21 +114,33 @@ export default function App() {
 
   const globalStyles = `
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${theme.bg}; color: ${theme.text}; transition: background 0.3s, color 0.3s; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${theme.bg}; color: ${theme.text}; transition: background 0.3s, color 0.3s; -webkit-font-smoothing: antialiased; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-thumb { background: ${theme.scrollbar}; border-radius: 2px; }
-    .input { width: 100%; background: ${theme.input}; border: 1px solid ${theme.inputBorder}; border-radius: 8px; padding: 10px 14px; font-family: inherit; font-size: 15px; color: ${theme.text}; outline: none; transition: all 0.2s; }
+    .input { width: 100%; background: ${theme.input}; border: 1px solid ${theme.inputBorder}; border-radius: 8px; padding: 10px 14px; font-family: inherit; font-size: 15px; color: ${theme.text}; outline: none; transition: all 0.2s; -webkit-appearance: none; }
     .input:focus { border-color: #7c6fff; box-shadow: 0 0 0 3px rgba(124,111,255,0.1); }
     .input::placeholder { color: ${theme.textDim}; }
     textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
     select.input { cursor: pointer; }
     select option { background: ${theme.input}; color: ${theme.text}; }
+    button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    @media (max-width: 640px) { .input { font-size: 16px; } }
   `;
 
   const showToast = useCallback((message, type = 'info') => {
     const id = generateId();
     setToasts(p => [...p, { id, message, type }]);
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500);
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      API.getMe()
+        .then(res => setCurrentUser(res.data))
+        .catch(() => localStorage.removeItem('token'));
+    }
   }, []);
 
   useEffect(() => {
@@ -172,7 +191,7 @@ export default function App() {
     checkDueDates();
     const interval = setInterval(checkDueDates, 60000);
     return () => clearInterval(interval);
-    }, [boards, currentUser]); // eslint-disable-line
+  }, [boards, currentUser]); // eslint-disable-line
 
   const handleLogin = async () => {
     setAuthError('');
@@ -215,6 +234,7 @@ export default function App() {
     setUsers([]);
     setWsConnected(false);
     setNotifications([]);
+    setShowMobileMenu(false);
   };
 
   const updateProfile = async (updates) => {
@@ -296,11 +316,12 @@ export default function App() {
         board.lists.flatMap(list =>
           list.tasks
             .filter(task => {
-              const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              const matchesSearch =
+                task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 task.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-              const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
-              return matchesSearch && matchesPriority;
+              const matchesPriorityFilter = filterPriority === 'all' || task.priority === filterPriority;
+              return matchesSearch && matchesPriorityFilter;
             })
             .map(task => ({ task, listTitle: list.title, boardTitle: board.title, board }))
         )
@@ -315,10 +336,10 @@ export default function App() {
   const dueTodayTasks = allTasks.filter(t => t.dueDate && new Date(t.dueDate).toDateString() === new Date().toDateString()).length;
 
   const navItems = [
-    { id: 'boards', label: 'Boards' },
-    { id: 'analytics', label: 'Analytics' },
-    { id: 'members', label: 'Members' },
-    { id: 'profile', label: 'Profile' },
+    { id: 'boards', label: 'Boards', icon: '⊞' },
+    { id: 'analytics', label: 'Analytics', icon: '📊' },
+    { id: 'members', label: 'Members', icon: '👥' },
+    { id: 'profile', label: 'Profile', icon: '👤' },
   ];
 
   const navigate = (id) => {
@@ -327,27 +348,29 @@ export default function App() {
     setShowSearch(false);
     setSearchQuery('');
     setShowMobileMenu(false);
+    setShowNotifs(false);
   };
 
+  // ─── AUTH SCREEN ───────────────────────────────────────────────────
   if (!currentUser) return (
     <>
       <style>{globalStyles}</style>
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: darkMode ? 'linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%)' : 'linear-gradient(135deg, #f0f4f8 0%, #e8e8ff 50%, #f0f4f8 100%)', padding: 16 }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: darkMode ? 'linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%)' : 'linear-gradient(135deg, #f0f4f8 0%, #e8e8ff 50%, #f0f4f8 100%)', padding: 16, overflowY: 'auto' }}>
         <div style={{ position: 'fixed', top: '10%', left: '10%', width: 300, height: 300, background: 'rgba(124,111,255,0.06)', borderRadius: '50%', filter: 'blur(60px)', pointerEvents: 'none' }} />
         <div style={{ position: 'fixed', bottom: '10%', right: '10%', width: 400, height: 400, background: 'rgba(96,165,250,0.06)', borderRadius: '50%', filter: 'blur(80px)', pointerEvents: 'none' }} />
         <button onClick={() => setDarkMode(p => !p)} style={{ position: 'fixed', top: 16, right: 16, background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 13, color: theme.textMuted, zIndex: 10 }}>
-          {darkMode ? 'Light' : 'Dark'}
+          {darkMode ? '☀️ Light' : '🌙 Dark'}
         </button>
-        <div style={{ width: '100%', maxWidth: 420, background: darkMode ? 'rgba(17,17,24,0.97)' : 'rgba(255,255,255,0.97)', border: `1px solid ${theme.border}`, borderRadius: 20, padding: '36px 28px', position: 'relative', zIndex: 1, backdropFilter: 'blur(10px)', boxShadow: darkMode ? '0 20px 60px rgba(0,0,0,0.5)' : '0 20px 60px rgba(0,0,0,0.1)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
-            <div style={{ width: 44, height: 44, background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'white', fontWeight: 800 }}>T</div>
+        <div style={{ width: '100%', maxWidth: 420, background: darkMode ? 'rgba(17,17,24,0.97)' : 'rgba(255,255,255,0.97)', border: `1px solid ${theme.border}`, borderRadius: 20, padding: isMobile ? '28px 20px' : '36px 28px', position: 'relative', zIndex: 1, backdropFilter: 'blur(10px)', boxShadow: darkMode ? '0 20px 60px rgba(0,0,0,0.5)' : '0 20px 60px rgba(0,0,0,0.1)', marginTop: isMobile ? 60 : 0, marginBottom: isMobile ? 20 : 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+            <div style={{ width: 44, height: 44, background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>⚡</div>
             <div>
               <div style={{ fontSize: 20, fontWeight: 800, color: theme.text }}>TaskFlow</div>
               <div style={{ fontSize: 12, color: theme.textDim }}>Project Management</div>
             </div>
           </div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: theme.text, marginBottom: 4 }}>{isSignUp ? 'Create Account' : 'Welcome Back'}</div>
-          <div style={{ fontSize: 14, color: theme.textMuted, marginBottom: 24 }}>{isSignUp ? 'Sign up for free' : 'Sign in to continue'}</div>
+          <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: theme.text, marginBottom: 4 }}>{isSignUp ? 'Create Account' : 'Welcome Back'}</div>
+          <div style={{ fontSize: 14, color: theme.textMuted, marginBottom: 24 }}>{isSignUp ? 'Sign up for free today' : 'Sign in to your account'}</div>
           {isSignUp && (
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 13, fontWeight: 600, color: theme.textMuted, display: 'block', marginBottom: 6 }}>Full Name</label>
@@ -356,7 +379,7 @@ export default function App() {
           )}
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 13, fontWeight: 600, color: theme.textMuted, display: 'block', marginBottom: 6 }}>Email Address</label>
-            <input className="input" placeholder="you@example.com" value={authForm.email} onChange={e => setAuthForm(p => ({ ...p, email: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !isSignUp) handleLogin(); }} />
+            <input className="input" type="email" placeholder="you@example.com" value={authForm.email} onChange={e => setAuthForm(p => ({ ...p, email: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !isSignUp) handleLogin(); }} />
           </div>
           <div style={{ marginBottom: isSignUp ? 14 : 20 }}>
             <label style={{ fontSize: 13, fontWeight: 600, color: theme.textMuted, display: 'block', marginBottom: 6 }}>Password</label>
@@ -374,9 +397,13 @@ export default function App() {
               </div>
             </div>
           )}
-          {authError && <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#f87171', marginBottom: 16 }}>{authError}</div>}
+          {authError && (
+            <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#f87171', marginBottom: 16 }}>
+              ⚠️ {authError}
+            </div>
+          )}
           <button onClick={isSignUp ? handleRegister : handleLogin} style={{ width: '100%', background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', color: 'white', border: 'none', borderRadius: 10, padding: '14px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: 15, fontWeight: 700, opacity: loading ? 0.7 : 1, marginBottom: 20 }}>
-            {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
+            {loading ? '⏳ Please wait...' : isSignUp ? '🚀 Create Account' : '🔐 Sign In'}
           </button>
           <div style={{ textAlign: 'center', fontSize: 14, color: theme.textMuted }}>
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}
@@ -390,42 +417,44 @@ export default function App() {
     </>
   );
 
+  // ─── MAIN APP ──────────────────────────────────────────────────────
   return (
     <>
       <style>{globalStyles}</style>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: theme.bg }}>
 
-        {/* Desktop Sidebar - only show on desktop */}
-        {!isMobile && (
-          <div style={{ width: 200, flexShrink: 0, background: theme.sidebar, borderRight: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '16px 14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${theme.border}` }}>
-              <div style={{ width: 32, height: 32, background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'white', fontWeight: 800, flexShrink: 0 }}>T</div>
+        {/* Sidebar — Desktop & Tablet */}
+        {showSidebar && (
+          <div style={{ width: sidebarWidth, flexShrink: 0, background: theme.sidebar, borderRight: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
+              <div style={{ width: 32, height: 32, background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>⚡</div>
               <div style={{ fontSize: 15, fontWeight: 800, color: theme.text }}>TaskFlow</div>
             </div>
             <div style={{ flex: 1, padding: '12px 6px', overflowY: 'auto' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: theme.textDim, padding: '0 8px', marginBottom: 6 }}>Menu</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: theme.textDim, padding: '0 8px', marginBottom: 6 }}>Workspace</div>
               {navItems.map(item => (
                 <div key={item.id} onClick={() => navigate(item.id)}
-                  style={{ display: 'flex', alignItems: 'center', padding: '9px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500, color: view === item.id && !selectedBoard ? '#7c6fff' : theme.textMuted, background: view === item.id && !selectedBoard ? 'rgba(124,111,255,0.1)' : 'transparent', marginBottom: 2 }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500, color: view === item.id && !selectedBoard ? '#7c6fff' : theme.textMuted, background: view === item.id && !selectedBoard ? 'rgba(124,111,255,0.1)' : 'transparent', marginBottom: 2, transition: 'all 0.15s' }}>
+                  <span>{item.icon}</span>
                   {item.label}
                 </div>
               ))}
               {(overdueTasks > 0 || dueTodayTasks > 0) && (
                 <div style={{ margin: '10px 6px', padding: '8px 10px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8 }}>
-                  {overdueTasks > 0 && <div style={{ fontSize: 11, color: '#f87171', fontWeight: 600 }}>{overdueTasks} overdue</div>}
-                  {dueTodayTasks > 0 && <div style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>{dueTodayTasks} due today</div>}
+                  {overdueTasks > 0 && <div style={{ fontSize: 11, color: '#f87171', fontWeight: 600 }}>🔴 {overdueTasks} overdue</div>}
+                  {dueTodayTasks > 0 && <div style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600, marginTop: overdueTasks > 0 ? 4 : 0 }}>🟡 {dueTodayTasks} due today</div>}
                 </div>
               )}
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: theme.textDim, padding: '10px 8px 6px' }}>Boards</div>
               {boards.map(b => (
                 <div key={b._id} onClick={() => { setSelectedBoard(b); setView('board'); setShowSearch(false); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: currentBoard?._id === b._id ? '#7c6fff' : theme.textMuted, background: currentBoard?._id === b._id ? 'rgba(124,111,255,0.1)' : 'transparent', overflow: 'hidden', marginBottom: 2 }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13, color: currentBoard?._id === b._id ? '#7c6fff' : theme.textMuted, background: currentBoard?._id === b._id ? 'rgba(124,111,255,0.1)' : 'transparent', overflow: 'hidden', marginBottom: 2, transition: 'all 0.15s' }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: b.color, flexShrink: 0 }} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</span>
                 </div>
               ))}
             </div>
-            <div style={{ padding: '10px 6px', borderTop: `1px solid ${theme.border}` }}>
+            <div style={{ padding: '10px 6px', borderTop: `1px solid ${theme.border}`, flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', marginBottom: 4, fontSize: 11, color: theme.textDim }}>
                 <div style={{ width: 5, height: 5, borderRadius: '50%', background: wsConnected ? '#4ade80' : '#f87171' }} />
                 {wsConnected ? 'Connected' : 'Connecting...'}
@@ -445,58 +474,51 @@ export default function App() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
           {/* Header */}
-          <div style={{ height: 52, display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: `1px solid ${theme.border}`, background: theme.sidebar, gap: 10, flexShrink: 0 }}>
-
-            {/* Mobile Menu Button */}
+          <div style={{ height: 52, display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: `1px solid ${theme.border}`, background: theme.sidebar, gap: 8, flexShrink: 0 }}>
             {isMobile && (
-              <button onClick={() => setShowMobileMenu(true)} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: theme.textMuted, fontSize: 16, flexShrink: 0 }}>
-                ☰
-              </button>
+              <button onClick={() => setShowMobileMenu(true)} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: theme.textMuted, fontSize: 16, flexShrink: 0, lineHeight: 1 }}>☰</button>
             )}
-
-            {view === 'board' && currentBoard && !showSearch && (
-              <>
-                <button onClick={() => { setSelectedBoard(null); setView('boards'); }} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.textMuted, cursor: 'pointer', padding: '5px 8px', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}>← Back</button>
-                <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{currentBoard.title}</div>
-              </>
-            )}
-            {view !== 'board' && !showSearch && (
-              <div style={{ fontSize: 16, fontWeight: 700, color: theme.text, flex: 1 }}>
-                {view === 'boards' ? 'My Boards' : view === 'analytics' ? 'Analytics' : view === 'members' ? 'Members' : 'Profile'}
+            {!showSearch && (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                {view === 'board' && currentBoard ? (
+                  <>
+                    <button onClick={() => { setSelectedBoard(null); setView('boards'); }} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.textMuted, cursor: 'pointer', padding: '5px 8px', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}>← Back</button>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentBoard.title}</div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: isMobile ? 15 : 16, fontWeight: 700, color: theme.text }}>
+                    {view === 'boards' ? 'My Boards' : view === 'analytics' ? 'Analytics' : view === 'members' ? 'Team Members' : 'Profile'}
+                  </div>
+                )}
               </div>
             )}
-
             {showSearch && (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input autoFocus className="input" placeholder="Search tasks..." value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); } }}
-                  style={{ fontSize: 14 }} />
-                <button onClick={() => { setShowSearch(false); setSearchQuery(''); }} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.textMuted, cursor: 'pointer', padding: '8px 10px', fontSize: 12, whiteSpace: 'nowrap' }}>Close</button>
+                <input autoFocus className="input" placeholder="Search tasks..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); } }} style={{ fontSize: 14 }} />
+                <button onClick={() => { setShowSearch(false); setSearchQuery(''); }} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.textMuted, cursor: 'pointer', padding: '8px 10px', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}>✕</button>
               </div>
             )}
-
             {!showSearch && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 {view === 'boards' && (
-                  <button onClick={() => setShowCreateBoard(true)} style={{ background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', color: 'white', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    + New
+                  <button onClick={() => setShowCreateBoard(true)} style={{ background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', color: 'white', border: 'none', borderRadius: 6, padding: isMobile ? '7px 10px' : '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {isMobile ? '+' : '+ New'}
                   </button>
                 )}
                 {!isMobile && (
                   <>
-                    <button onClick={() => setShowSearch(true)} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.textMuted, cursor: 'pointer', padding: '6px 10px', fontSize: 12 }}>Search</button>
-                    <button onClick={() => setDarkMode(p => !p)} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.textMuted, cursor: 'pointer', padding: '6px 10px', fontSize: 12 }}>{darkMode ? 'Light' : 'Dark'}</button>
+                    <button onClick={() => setShowSearch(true)} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.textMuted, cursor: 'pointer', padding: '6px 10px', fontSize: 12 }}>🔍</button>
+                    <button onClick={() => setDarkMode(p => !p)} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.textMuted, cursor: 'pointer', padding: '6px 10px', fontSize: 12 }}>{darkMode ? '☀️' : '🌙'}</button>
                   </>
                 )}
                 <div style={{ position: 'relative' }}>
                   <button onClick={() => setShowNotifs(p => !p)} style={{ background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.textMuted, cursor: 'pointer', padding: '6px 10px', fontSize: 12, position: 'relative' }}>
-                    Alerts
+                    🔔
                     {unread > 0 && <span style={{ position: 'absolute', top: -4, right: -4, background: '#7c6fff', color: 'white', fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unread}</span>}
                   </button>
                   {showNotifs && <NotificationsPanel notifications={notifications} onMarkRead={markRead} />}
                 </div>
-                <div onClick={() => navigate('profile')} style={{ cursor: 'pointer' }}>
+                <div onClick={() => navigate('profile')} style={{ cursor: 'pointer', flexShrink: 0 }}>
                   <Avatar user={currentUser} size={30} />
                 </div>
               </div>
@@ -505,43 +527,46 @@ export default function App() {
 
           {/* Mobile Sidebar Overlay */}
           {showMobileMenu && (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 200 }}>
-              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} onClick={() => setShowMobileMenu(false)} />
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 260, background: theme.sidebar, borderRight: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', zIndex: 201 }}>
-                <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${theme.border}` }}>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 300 }}>
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)' }} onClick={() => setShowMobileMenu(false)} />
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: Math.min(280, windowWidth * 0.82), background: theme.sidebar, borderRight: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', zIndex: 301 }}>
+                <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 32, height: 32, background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'white', fontWeight: 800 }}>T</div>
+                    <div style={{ width: 32, height: 32, background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>⚡</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>TaskFlow</div>
                   </div>
-                  <button onClick={() => setShowMobileMenu(false)} style={{ background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 20 }}>✕</button>
+                  <button onClick={() => setShowMobileMenu(false)} style={{ background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 22, padding: '4px 8px' }}>✕</button>
                 </div>
                 <div style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: theme.textDim, padding: '0 10px', marginBottom: 8 }}>Workspace</div>
                   {navItems.map(item => (
                     <div key={item.id} onClick={() => navigate(item.id)}
-                      style={{ padding: '12px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 15, fontWeight: 500, color: view === item.id ? '#7c6fff' : theme.textMuted, background: view === item.id ? 'rgba(124,111,255,0.1)' : 'transparent', marginBottom: 4 }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', borderRadius: 10, cursor: 'pointer', fontSize: 15, fontWeight: 500, color: view === item.id && !selectedBoard ? '#7c6fff' : theme.textMuted, background: view === item.id && !selectedBoard ? 'rgba(124,111,255,0.1)' : 'transparent', marginBottom: 4 }}>
+                      <span style={{ fontSize: 18 }}>{item.icon}</span>
                       {item.label}
                     </div>
                   ))}
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: theme.textDim, padding: '10px 14px 6px' }}>Boards</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: theme.textDim, padding: '12px 10px 8px' }}>Boards</div>
+                  {boards.length === 0 && <div style={{ padding: '8px 14px', fontSize: 13, color: theme.textDim }}>No boards yet</div>}
                   {boards.map(b => (
                     <div key={b._id} onClick={() => { setSelectedBoard(b); setView('board'); setShowMobileMenu(false); }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 14, color: theme.textMuted, marginBottom: 2 }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, cursor: 'pointer', fontSize: 14, color: currentBoard?._id === b._id ? '#7c6fff' : theme.textMuted, background: currentBoard?._id === b._id ? 'rgba(124,111,255,0.1)' : 'transparent', marginBottom: 2 }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: b.color, flexShrink: 0 }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</span>
                     </div>
                   ))}
                 </div>
-                <div style={{ padding: '12px 14px', borderTop: `1px solid ${theme.border}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                    <Avatar user={currentUser} size={36} />
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: theme.text }}>{currentUser.name}</div>
-                      <div style={{ fontSize: 12, color: theme.textDim }}>{currentUser.email}</div>
+                <div style={{ padding: '12px 14px', borderTop: `1px solid ${theme.border}`, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                    <Avatar user={currentUser} size={38} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: theme.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentUser.name}</div>
+                      <div style={{ fontSize: 12, color: theme.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentUser.email}</div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => setDarkMode(p => !p)} style={{ flex: 1, background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px', cursor: 'pointer', fontSize: 13, color: theme.textMuted }}>{darkMode ? 'Light' : 'Dark'}</button>
-                    <button onClick={handleLogout} style={{ flex: 1, background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '8px', cursor: 'pointer', fontSize: 13, color: '#f87171', fontWeight: 600 }}>Sign Out</button>
+                    <button onClick={() => setDarkMode(p => !p)} style={{ flex: 1, background: 'transparent', border: `1px solid ${theme.border}`, borderRadius: 8, padding: '10px 8px', cursor: 'pointer', fontSize: 13, color: theme.textMuted }}>{darkMode ? '☀️ Light' : '🌙 Dark'}</button>
+                    <button onClick={handleLogout} style={{ flex: 1, background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '10px 8px', cursor: 'pointer', fontSize: 13, color: '#f87171', fontWeight: 600 }}>Sign Out</button>
                   </div>
                 </div>
               </div>
@@ -550,10 +575,11 @@ export default function App() {
 
           {/* Search Results */}
           {showSearch && searchQuery.trim() && (
-            <div style={{ flex: 1, overflowY: 'auto', background: theme.bg, padding: 16, paddingBottom: isMobile ? 76 : 16 }}>
+            <div style={{ flex: 1, overflowY: 'auto', background: theme.bg, padding: 16, paddingBottom: bottomNavHeight + 16 }}>
               <div style={{ fontSize: 13, color: theme.textDim, marginBottom: 12 }}>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"</div>
               {searchResults.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, color: theme.textDim }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
                   <div style={{ fontSize: 15, fontWeight: 600, color: theme.textMuted, marginBottom: 6 }}>No results found</div>
                   <div style={{ fontSize: 13 }}>Try different keywords</div>
                 </div>
@@ -579,30 +605,30 @@ export default function App() {
 
           {/* Main Views */}
           {(!showSearch || !searchQuery.trim()) && (
-            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', paddingBottom: isMobile ? 60 : 0 }}>
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', paddingBottom: bottomNavHeight }}>
               {view === 'boards' && (
                 <div style={{ flex: 1, overflowY: 'auto', background: theme.bg }}>
                   {boards.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: theme.textDim, padding: 24, textAlign: 'center' }}>
-                      <div style={{ width: 60, height: 60, background: 'rgba(124,111,255,0.1)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, fontSize: 28, color: '#7c6fff' }}>+</div>
+                      <div style={{ width: 72, height: 72, background: 'rgba(124,111,255,0.1)', borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, fontSize: 32 }}>⊞</div>
                       <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: theme.textMuted }}>No boards yet</div>
                       <div style={{ fontSize: 14, marginBottom: 24 }}>Create your first board to get started</div>
                       <button onClick={() => setShowCreateBoard(true)} style={{ background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', color: 'white', border: 'none', borderRadius: 10, padding: '12px 24px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>Create First Board</button>
                     </div>
                   ) : (
-                    <div style={{ padding: 16 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(260px,1fr))', gap: 14 }}>
+                    <div style={{ padding: isMobile ? 12 : 16 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(260px, 1fr))', gap: isMobile ? 10 : 14 }}>
                         {boards.map(board => {
                           const total = board.lists.reduce((s, l) => s + l.tasks.length, 0);
                           const done = (board.lists.find(l => l.title.toLowerCase() === 'done') || { tasks: [] }).tasks.length;
-                          const overdue = board.lists.flatMap(l => l.tasks).filter(t => t.dueDate && zznew Date(t.dueDate) < new Date()).length;
+                          const overdue = board.lists.flatMap(l => l.tasks).filter(t => t.dueDate && new Date(t.dueDate) < new Date()).length;
                           return (
                             <div key={board._id} onClick={() => { setSelectedBoard(board); setView('board'); }}
-                              style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, padding: 18, cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'all 0.2s', WebkitTapHighlightColor: 'transparent' }}>
+                              style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, padding: isMobile ? 14 : 18, cursor: 'pointer', position: 'relative', overflow: 'hidden', WebkitTapHighlightColor: 'transparent' }}>
                               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: board.color }} />
                               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, marginTop: 4 }}>
-                                <div style={{ fontSize: 15, fontWeight: 700, color: theme.text }}>{board.title}</div>
-                                {overdue > 0 && <span style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, flexShrink: 0, marginLeft: 8 }}>{overdue} overdue</span>}
+                                <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 700, color: theme.text, flex: 1, paddingRight: 8 }}>{board.title}</div>
+                                {overdue > 0 && <span style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 10, flexShrink: 0 }}>{overdue} overdue</span>}
                               </div>
                               <div style={{ fontSize: 12, color: theme.textDim, marginBottom: 12 }}>{board.description || 'No description'}</div>
                               {total > 0 && (
@@ -636,14 +662,15 @@ export default function App() {
             </div>
           )}
 
-          {/* Mobile Bottom Navigation - only show on mobile */}
-          {isMobile && (
-            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: theme.sidebar, borderTop: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-around', zIndex: 100, height: 60 }}>
+          {/* Bottom Nav — Mobile & Tablet */}
+          {(isMobile || isTablet) && (
+            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: theme.sidebar, borderTop: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-around', zIndex: 100, height: bottomNavHeight, paddingBottom: 'env(safe-area-inset-bottom)' }}>
               {navItems.map(item => (
                 <div key={item.id} onClick={() => navigate(item.id)}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 12px', cursor: 'pointer', flex: 1, WebkitTapHighlightColor: 'transparent' }}>
-                  <div style={{ width: 4, height: 4, borderRadius: '50%', background: view === item.id && !selectedBoard ? '#7c6fff' : 'transparent', marginBottom: 2 }} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: view === item.id && !selectedBoard ? '#7c6fff' : theme.textDim }}>{item.label}</span>
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '6px 0', cursor: 'pointer', flex: 1, WebkitTapHighlightColor: 'transparent' }}>
+                  <span style={{ fontSize: isTablet ? 20 : 18, lineHeight: 1 }}>{item.icon}</span>
+                  <span style={{ fontSize: isTablet ? 12 : 10, fontWeight: 600, color: view === item.id && !selectedBoard ? '#7c6fff' : theme.textDim }}>{item.label}</span>
+                  {view === item.id && !selectedBoard && <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#7c6fff' }} />}
                 </div>
               ))}
             </div>
