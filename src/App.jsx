@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import { COLORS } from './constants/data';
 import { generateId } from './utils/helpers';
 import * as API from './api/index';
@@ -8,6 +9,8 @@ import Members from './Members';
 import NotificationsPanel from './NotificationsPanel';
 import Profile from './Profile';
 import { Avatar, Toast } from './UI';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 const BOARD_COLORS = [
   '#7c6fff', '#60a5fa', '#4ade80', '#fbbf24',
@@ -62,7 +65,7 @@ function CreateBoardModal({ onClose, onCreate, theme }) {
   );
 }
 
-export default function App() {
+function MainApp() {
   const [currentUser, setCurrentUser] = useState(null);
   const [boards, setBoards] = useState([]);
   const [users, setUsers] = useState([]);
@@ -405,6 +408,16 @@ export default function App() {
           <button onClick={isSignUp ? handleRegister : handleLogin} style={{ width: '100%', background: 'linear-gradient(135deg, #7c6fff, #60a5fa)', color: 'white', border: 'none', borderRadius: 10, padding: '14px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: 15, fontWeight: 700, opacity: loading ? 0.7 : 1, marginBottom: 20 }}>
             {loading ? '⏳ Please wait...' : isSignUp ? '🚀 Create Account' : '🔐 Sign In'}
           </button>
+
+          {/* Forgot Password Link */}
+          {!isSignUp && (
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <a href="/forgot-password" style={{ color: '#7c6fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+                Forgot Password?
+              </a>
+            </div>
+          )}
+
           <div style={{ textAlign: 'center', fontSize: 14, color: theme.textMuted }}>
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}
             <span onClick={() => { setIsSignUp(p => !p); setAuthError(''); setShowPassword(false); setShowConfirmPassword(false); setAuthForm({ name: '', email: '', password: '', confirmPassword: '' }); }} style={{ color: '#7c6fff', cursor: 'pointer', marginLeft: 6, fontWeight: 600 }}>
@@ -682,5 +695,15 @@ export default function App() {
       {showNotifs && <div style={{ position: 'fixed', inset: 0, zIndex: 499 }} onClick={() => setShowNotifs(false)} />}
       <Toast toasts={toasts} remove={id => setToasts(p => p.filter(t => t.id !== id))} />
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password/:token" element={<ResetPassword />} />
+      <Route path="/*" element={<MainApp />} />
+    </Routes>
   );
 }

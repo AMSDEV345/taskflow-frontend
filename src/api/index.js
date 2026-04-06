@@ -17,6 +17,8 @@ export const login = (data) => API.post('/auth/login', data);
 export const register = (data) => API.post('/auth/register', data);
 export const getMe = () => API.get('/auth/me');
 export const updateProfile = (data) => API.put('/auth/profile', data);
+export const forgotPassword = (data) => API.post('/auth/forgot-password', data);
+export const resetPassword = (token, data) => API.post(`/auth/reset-password/${token}`, data);
 
 // Boards
 export const getBoards = () => API.get('/boards');
