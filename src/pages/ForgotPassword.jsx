@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 
-const API_URL = 'https://taskflow-backend-production-1ee5.up.railway.app';
+const API_URL = 'https://taskflow-backend-rose.vercel.app';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
