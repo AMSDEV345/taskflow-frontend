@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 
-const API_URL = 'https://taskflow-backend-rose.vercel.app';
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
